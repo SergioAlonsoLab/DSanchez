@@ -12,7 +12,7 @@ rownames(data0) <- data0$X
 data0$X <- NULL
 
 m <- regexpr("_.+_",colnames(data0))
-patient <- regmatches(colnames(data0),m) %>% gsub("_","",.)
+patient <- regmatches(colnames(data0),m) %>% gsub("_","",.) 
 
 clinical0 <- gdata::read.xls("data/Macrophages clinical data.xlsx",nrows=22)
 rownames(clinical0) <- clinical0$ID
@@ -29,14 +29,15 @@ rownames(genes0) <- genes0$Probe
 data1 <- data0[inGenes,] %>% limma::normalizeBetweenArrays()
 rownames(data1) <- genes0[inGenes,"Symbol"]
 
-sampleData <- colnames(data1) %>% gsub(".","_",.,fixed=T) %>% strsplit(.,"_") %>% unlist
-sampleData <- as.data.frame(matrix(sampleData,byrow = T,ncol=4))
+colnames(data1) %>% gsub(".","_",.,fixed=T) %>% strsplit(.,"_") %>% 
+  unlist %>% matrix(.,byrow=T,ncol=4) %>% as.data.frame -> sampleData
+
 colnames(sampleData) <- c("location","status","patient","batch")
 
 boxplot(data1,las=2,pch=19) # check the normalization
 
-location <- factor(substr(colnames(data0),1,3))
-status <- factor(substr(colnames(data0),5,7))
+location <- factor(sampleData$location)
+status <- factor(sampleData$status)
 
 sum(is.na(data1)) # there are no NAs
 
@@ -110,17 +111,32 @@ getSummaryValues <- function(x,what=c("Estimate","Std.Error","t value","pValue")
 
 
 pValues <- data.frame(Gene=names(lm0),
-                       P_all=getSummaryValues(lm0,"p")[,2],
+                       P_global=getSummaryValues(lm0,"p")[,2],
                        P_sub=getSummaryValues(lm1,"p")[,2],
                        P_vis=getSummaryValues(lm2,"p")[,2],
                        P_status=getSummaryValues(lm3,"p")[,2],
                        P_location=getSummaryValues(lm3,"p")[,3],
                        P_interaction=getSummaryValues(lm4,"p")[,4])
 
+pValues[,2:7] %>% signif(.,6) -> pValues[,2:7]
 write.csv(pValues,file = "output/pvalues.csv",quote = F,row.names = F)
 
 
-# boxplot with location and status
+# generate a table with t-statistic values
+
+tValues <- data.frame(Gene=names(lm0),
+                      t_global=getSummaryValues(lm0,"t")[,2],
+                      t_sub=getSummaryValues(lm1,"t")[,2],
+                      t_vis=getSummaryValues(lm2,"t")[,2],
+                      t_status=getSummaryValues(lm3,"t")[,2],
+                      t_location=getSummaryValues(lm3,"t")[,3],
+                      t_interaction=getSummaryValues(lm4,"t")[,4])
+
+
+tValues[,2:7] %>% signif(.,6) -> tValues[,2:7]
+write.csv(tValues,file = "output/tvalues.csv",quote = F,row.names = F)
+
+# boxplot with location and status ----
 
 myBoxPlot <- function(gene) {
   yrange <- range(data1[gene,])
@@ -128,8 +144,8 @@ myBoxPlot <- function(gene) {
   boxplot(data1[gene,] ~ status + location,las=1,ylab="Expression (log10)",pch=19,cex=.5,col=disPalette,ylim=prange,xaxt="n",xlab=NULL)
   axis(side = 1,1:4,labels=paste(c("HEA","UNH","HEA","UNH"),c("SUB","SUB","VIS","VIS"),sep="\n"),padj = .5)
   means <- tapply(data1[gene,],list(status,location),mean,na.rm=T)
-  segments(c(1,3),means[c(1,3)],c(2,4),means[c(2,4)],lwd=2,lty=2)
-  points(1:4,means,pch=21,bg="grey",cex=2)
+  segments(c(1,3),means[c(1,3)],c(2,4),means[c(2,4)],lwd=2)
+  points(1:4,means,pch=23,bg="yellow",cex=2)
   segments(2.5,prange[1]/2,2.5,yrange[1]+diff(yrange)*1.1)
   segments(0,yrange[1]+diff(yrange)*1.1,5,yrange[1]+diff(yrange)*1.1)
   title(ifelse(is.numeric(gene),rownames(data1)[gene],gene))
@@ -143,38 +159,32 @@ myBoxPlot <- function(gene) {
   
 }
 
-# generate a table withh t statistic values
-
-tValues <- data.frame(Gene=names(lm0),
-                      t_all=getSummaryValues(lm0,"t")[,2],
-                      t_sub=getSummaryValues(lm1,"t")[,2],
-                      t_vis=getSummaryValues(lm2,"t")[,2],
-                      t_status=getSummaryValues(lm3,"t")[,2],
-                      t_location=getSummaryValues(lm3,"t")[,3],
-                      t_interaction=getSummaryValues(lm4,"t")[,4])
 
 
-
-write.csv(tValues,file = "output/tvalues.csv",quote = F,row.names = F)
-
-# generate some graphs with different types of genes
-
-myBoxPlot(1)
-
-par(mfrow=c(2,3),mar=c(5,5,2,1))
-for(i in order(pValues$P_all)[1:12]) myBoxPlot(i)
-
-table(lm1.pvals$status < 0.05,lm2.pvals$status < 0.05)
-selected <- which(lm1.pvals$status < 0.05 & lm2.pvals$status < 0.05)
-for(i in selected) myBoxPlot(i)
+# generate some graphs with different types of genes ----
 
 
+pdf("output/status.pdf",8,12) 
+par(mfrow=c(4,3),mar=c(4,4,2,1))
+for(i in order(pValues$P_status)[1:24]) myBoxPlot(i)
+dev.off()
 
+pdf("output/subcutaneous.pdf",8,12) 
+par(mfrow=c(4,3),mar=c(4,4,2,1))
+for(i in order(pValues$P_sub)[1:24]) myBoxPlot(i)
+dev.off()
 
+pdf("output/visceral.pdf",8,12) 
+par(mfrow=c(4,3),mar=c(4,4,2,1))
+for(i in order(pValues$P_vis)[1:24]) myBoxPlot(i)
+dev.off()
 
+pdf("output/interactions.pdf",8,12) 
+par(mfrow=c(4,3),mar=c(4,4,2,1))
+for(i in order(pValues$P_interaction)[1:24]) myBoxPlot(i)
+dev.off()
 
-
-
+# scraps ----
 
 
 lm4.pvals[order(lm4.pvals$`statusUNH:locationVIS`),][1:10,]
