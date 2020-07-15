@@ -45,7 +45,7 @@ pca1 <- prcomp(t(data1),scale. = T)
 plot(pca1$x[,1:2],col=locPalette[type1],pch=19,main=c("PCA - tissue location"))
 plot(pca1$x[,1:2],col=disPalette[type2],pch=19,main=c("PCA - disease status"))
 
-summary(glm(type1 ~ .,as.data.frame(pca1$x[,c(1,2,4)]),family=binomial))
+summary(glm(type1 ~ .,as.data.frame(pca1$x[,c(1,2)]),family=binomial))
 plot(pca1$x[,c(1,4)],col=locPalette[type1],pch=19,main=c("PCA - tissue location"))
 
 summary(glm(type1 ~ pca1$x[,1] + pca1$x[,2],family="binomial"))
@@ -55,13 +55,13 @@ summary(lm(pca1$x[,2] ~ type1))
 summary(lm(pca1$x[,1] ~ type2))
 summary(lm(pca1$x[,2] ~ type2))
 
+
 # There are no significant differences in global expression according to disease vs not diseased
 
 
 umap1 <- umap(scale(t(data1)))
 plot(umap1$layout,col=locPalette[type1],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - tissue location")
 identify(umap1$layout[,1],umap1$layout[,2],rownames(umap1$layout))
-points(umap1$layout["SUB.UNH_550174_1",],col="red")
 
 plot(umap1$layout,col=disPalette[type2],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - disease status")
 
@@ -73,16 +73,47 @@ boxplot(data1,col=disPalette[type2],las=2)
 
 # Lineal models with and without interactions
 
+# Healthy vs Unhealthy
+# In SUB
+status <- type2[type1=="SUB"]
+lm1 <- apply(data1[,type1=="SUB"],1,function(x) lm(x ~ status))
+
+# In VIS
+status <- type2[type1=="VIS"]
+lm2 <- apply(data1[,type1=="VIS"],1,function(x) lm(x ~ status))
+
+# Get P-values from a list of lmodels
+
+getPvals <- function(x) {
+  sapply(x,function(x) summary(x) %>% coef %>% .[,'Pr(>|t|)']) %>% t %>% as.data.frame
+}
+
+
+getPvals(lm1) -> lm1.pvals
+getPvals(lm2) -> lm2.pvals
+
+table(lm1.pvals$statusUNH < 0.05,lm2.pvals$statusUNH < 0.05)
+
+plot(lm1.pvals[,2],lm2.pvals[,2],log="xy")
+
 lm0 <- apply(data1,1,function(x) lm(x ~ type1 + type2))
 lm1 <- apply(data1,1,function(x) lm(x ~ type1 * type2))
 
+sapply(lm0,function(x) {
+  summary(x) %>% coef %>% .[,4]
+}) %>% t %>% as.data.frame -> no.interaction.pvals
+
+
 sapply(lm1,function(x) {
-  summary(x) %>% coef %>% .[4,4]
-}) -> interaction.pval
+  summary(x) %>% coef %>% .[,4]
+}) %>% t %>% as.data.frame -> interaction.pvals
 
-table(interaction.pval < 0.01)
+plot(no.interaction.pvals$type1VIS,interaction.pvals$type1VIS,log="xy",pch=".")
 
-candidates <- which(interaction.pval < 0.05)
+candidates <- which(interaction.pvals$`type1VIS:type2UNH` < 0.05)
+
+table(p.adjust(interaction.pvals$`type1VIS:type2UNH`) < 0.05)
+
 
 sapply(names(candidates),function(x) {
   
