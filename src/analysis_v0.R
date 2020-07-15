@@ -29,68 +29,156 @@ rownames(genes0) <- genes0$Probe
 data1 <- data0[inGenes,] %>% limma::normalizeBetweenArrays()
 rownames(data1) <- genes0[inGenes,"Symbol"]
 
-boxplot(data1,las=2,pch=19)
+sampleData <- colnames(data1) %>% gsub(".","_",.,fixed=T) %>% strsplit(.,"_") %>% unlist
+sampleData <- as.data.frame(matrix(sampleData,byrow = T,ncol=4))
+colnames(sampleData) <- c("location","status","patient","batch")
 
-type1 <- factor(substr(colnames(data0),1,3))
-type2 <- factor(substr(colnames(data0),5,7))
+boxplot(data1,las=2,pch=19) # check the normalization
 
-colSums(is.na(data1))
+location <- factor(substr(colnames(data0),1,3))
+status <- factor(substr(colnames(data0),5,7))
+
+sum(is.na(data1)) # there are no NAs
+
+# color palettes
 
 locPalette <- c("lightblue3","darkblue")
-disPalette <- c("green3","orange3")
+disPalette <- c("green3","red")
+
+# PCA analysis using all genes
 
 par(mfrow=c(2,2),mar=c(5,5,2,2))
 
 pca1 <- prcomp(t(data1),scale. = T)
-plot(pca1$x[,1:2],col=locPalette[type1],pch=19,main=c("PCA - tissue location"))
-plot(pca1$x[,1:2],col=disPalette[type2],pch=19,main=c("PCA - disease status"))
+plot(pca1$x[,1:2],col=locPalette[location],pch=19,main=c("PCA - tissue location"))
+plot(pca1$x[,1:2],col=disPalette[status],pch=19,main=c("PCA - disease status"))
+summary(glm(location ~ .,as.data.frame(pca1$x[,c(1,2)]),family=binomial))
+summary(lm(pca1$x[,1] ~ location))
+summary(lm(pca1$x[,2] ~ location))
 
-summary(glm(type1 ~ .,as.data.frame(pca1$x[,c(1,2)]),family=binomial))
-plot(pca1$x[,c(1,4)],col=locPalette[type1],pch=19,main=c("PCA - tissue location"))
-
-summary(glm(type1 ~ pca1$x[,1] + pca1$x[,2],family="binomial"))
-summary(lm(pca1$x[,1] ~ type1))
-summary(lm(pca1$x[,2] ~ type1))
-
-summary(lm(pca1$x[,1] ~ type2))
-summary(lm(pca1$x[,2] ~ type2))
+summary(glm(status ~ .,as.data.frame(pca1$x[,c(1,2)]),family=binomial))
+summary(lm(pca1$x[,1] ~ status))
+summary(lm(pca1$x[,2] ~ status))
 
 
 # There are no significant differences in global expression according to disease vs not diseased
 
 
 umap1 <- umap(scale(t(data1)))
-plot(umap1$layout,col=locPalette[type1],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - tissue location")
+plot(umap1$layout,col=locPalette[location],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - tissue location")
 identify(umap1$layout[,1],umap1$layout[,2],rownames(umap1$layout))
 
-plot(umap1$layout,col=disPalette[type2],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - disease status")
+plot(umap1$layout,col=disPalette[status],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - disease status")
 
-par(mfrow=c(1,2),mar=c(12,2,1,1))
-boxplot(data1,col=locPalette[type1],las=2)
-boxplot(data1,col=disPalette[type2],las=2)
+par(mfrow=c(1,2),mar=c(12,4,3,1))
+boxplot(data1,col=locPalette[location],las=2)
+boxplot(data1,col=disPalette[status],las=2)
 
 
 
 # Lineal models with and without interactions
 
 # Healthy vs Unhealthy
+# In ALL
+lm0 <- apply(data1,1,function(x) lm(x ~ status))
+
 # In SUB
-status <- type2[type1=="SUB"]
-lm1 <- apply(data1[,type1=="SUB"],1,function(x) lm(x ~ status))
+lm1 <- apply(data1[,location=="SUB"],1,function(x) lm(x ~ status[location=="SUB"]))
 
 # In VIS
-status <- type2[type1=="VIS"]
-lm2 <- apply(data1[,type1=="VIS"],1,function(x) lm(x ~ status))
+lm2 <- apply(data1[,location=="VIS"],1,function(x) lm(x ~ status[location=="VIS"]))
 
-# Get P-values from a list of lmodels
+# 2-factor models
+# Without interactions
+lm3 <- apply(data1,1,function(x) lm(x ~ status + location))
 
-getPvals <- function(x) {
-  sapply(x,function(x) summary(x) %>% coef %>% .[,'Pr(>|t|)']) %>% t %>% as.data.frame
+# With interactions
+lm4 <- apply(data1,1,function(x) lm(x ~ status * location))
+
+
+
+# Get coefficients, t-statistic, or P-values from a list of linear models
+
+getSummaryValues <- function(x,what=c("Estimate","Std.Error","t value","pValue")) {
+  what <- match.arg(what)
+  if(what=="pValue") what <- "Pr(>|t|)"
+  sapply(x,function(x) summary(x) %>% coef %>% .[,what]) %>% t %>% as.data.frame
 }
 
 
-getPvals(lm1) -> lm1.pvals
-getPvals(lm2) -> lm2.pvals
+# generate a table with pvalues
+
+
+pValues <- data.frame(Gene=names(lm0),
+                       P_all=getSummaryValues(lm0,"p")[,2],
+                       P_sub=getSummaryValues(lm1,"p")[,2],
+                       P_vis=getSummaryValues(lm2,"p")[,2],
+                       P_status=getSummaryValues(lm3,"p")[,2],
+                       P_location=getSummaryValues(lm3,"p")[,3],
+                       P_interaction=getSummaryValues(lm4,"p")[,4])
+
+write.csv(pValues,file = "output/pvalues.csv",quote = F,row.names = F)
+
+
+# boxplot with location and status
+
+myBoxPlot <- function(gene) {
+  yrange <- range(data1[gene,])
+  prange <- yrange + c(0,diff(yrange)/2)
+  boxplot(data1[gene,] ~ status + location,las=1,ylab="Expression (log10)",pch=19,cex=.5,col=disPalette,ylim=prange,xaxt="n",xlab=NULL)
+  axis(side = 1,1:4,labels=paste(c("HEA","UNH","HEA","UNH"),c("SUB","SUB","VIS","VIS"),sep="\n"),padj = .5)
+  means <- tapply(data1[gene,],list(status,location),mean,na.rm=T)
+  segments(c(1,3),means[c(1,3)],c(2,4),means[c(2,4)],lwd=2,lty=2)
+  points(1:4,means,pch=21,bg="grey",cex=2)
+  segments(2.5,prange[1]/2,2.5,yrange[1]+diff(yrange)*1.1)
+  segments(0,yrange[1]+diff(yrange)*1.1,5,yrange[1]+diff(yrange)*1.1)
+  title(ifelse(is.numeric(gene),rownames(data1)[gene],gene))
+  text(1.5,yrange[1] + diff(yrange)*1.05,sprintf("P=%1.2g",pValues[gene,"P_sub"]))
+  text(3.5,yrange[1] + diff(yrange)*1.05,sprintf("P=%1.2g",pValues[gene,"P_vis"]))
+  text(2.5,yrange[1] + diff(yrange)*1.3,sprintf("Pglobal=%1.2g\nPstatus=%1.2g\nPlocation=%1.2g\nPinter=%1.2g",
+                                               pValues[gene,"P_all"],
+                                               pValues[gene,"P_status"],
+                                               pValues[gene,"P_location"],
+                                               pValues[gene,"P_interaction"]))
+  
+}
+
+# generate a table withh t statistic values
+
+tValues <- data.frame(Gene=names(lm0),
+                      t_all=getSummaryValues(lm0,"t")[,2],
+                      t_sub=getSummaryValues(lm1,"t")[,2],
+                      t_vis=getSummaryValues(lm2,"t")[,2],
+                      t_status=getSummaryValues(lm3,"t")[,2],
+                      t_location=getSummaryValues(lm3,"t")[,3],
+                      t_interaction=getSummaryValues(lm4,"t")[,4])
+
+
+
+write.csv(tValues,file = "output/tvalues.csv",quote = F,row.names = F)
+
+# generate some graphs with different types of genes
+
+myBoxPlot(1)
+
+par(mfrow=c(2,3),mar=c(5,5,2,1))
+for(i in order(pValues$P_all)[1:12]) myBoxPlot(i)
+
+table(lm1.pvals$status < 0.05,lm2.pvals$status < 0.05)
+selected <- which(lm1.pvals$status < 0.05 & lm2.pvals$status < 0.05)
+for(i in selected) myBoxPlot(i)
+
+
+
+
+
+
+
+
+
+
+lm4.pvals[order(lm4.pvals$`statusUNH:locationVIS`),][1:10,]
+
 
 table(lm1.pvals$statusUNH < 0.05,lm2.pvals$statusUNH < 0.05)
 
@@ -208,3 +296,4 @@ plot(clinical0$IMC,clinical0$Glu)
 cor.test(clinical0$IMC,clinical0$Diabetes,method = "spear")
 
 plot(clinical0$Glu ~ clinical0$Diabetes)
+
