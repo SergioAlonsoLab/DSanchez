@@ -1,11 +1,11 @@
 # data analysis for David Sanchez
 # the data has been previously extensively analyzed by VHIO genomics platform
 
-setwd("/imppc/labs/mplab/salonso/DSanchez/")
+try(setwd("/imppc/labs/mplab/salonso/DSanchez/"),silent=T)
+try(setwd("/Users/sergioalonso/Documents/DSanchez/"),silent=T)
 
 library(umap)
 library(magrittr)
-library(gplots)
 
 data0 <- read.delim("data/results/Normalized.Filtered.csv",sep=";",nrows = 138750,dec = ",")
 rownames(data0) <- data0$X
@@ -67,7 +67,7 @@ summary(lm(pca1$x[,2] ~ status))
 
 umap1 <- umap(scale(t(data1)))
 plot(umap1$layout,col=locPalette[location],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - tissue location")
-identify(umap1$layout[,1],umap1$layout[,2],rownames(umap1$layout))
+#identify(umap1$layout[,1],umap1$layout[,2],rownames(umap1$layout))
 
 plot(umap1$layout,col=disPalette[status],pch=19,xlab="UMAP1",ylab="UMAP2",main="UMAP - disease status")
 
@@ -118,7 +118,7 @@ pValues <- data.frame(Gene=names(lm0),
                        P_location=getSummaryValues(lm3,"p")[,3],
                        P_interaction=getSummaryValues(lm4,"p")[,4])
 
-pValues[,2:7] %>% signif(.,6) -> pValues[,2:7]
+pValues[,2:7] %>% signif(.,6) -> pValues[,2:7] # for clarity, round to 6 significative digits
 write.csv(pValues,file = "output/pvalues.csv",quote = F,row.names = F)
 
 
@@ -186,19 +186,10 @@ dev.off()
 
 # Create ranked lists for GSEA ----
 
-x <- tValues[,c(1,3)][order(pValues$P_sub),]
-write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
-
-x <- tValues[,c(1,4)][order(pValues$P_vis),]
-write.table(x,file = "output/visceral.rnk",sep="\t",row.names = F,col.names = F,quote = F)
-
-x <- tValues[,c(1,3)][order(pValues$P_sub),]
-write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
-
-x <- tValues[,c(1,3)][order(pValues$P_sub),]
-write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
-
-
+write.table(tValues[,c(1,3)],file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+write.table(tValues[,c(1,4)],file = "output/visceral.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+write.table(tValues[,c(1,5)],file = "output/status.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+write.table(tValues[,c(1,7)],file = "output/interaction.rnk",sep="\t",row.names = F,col.names = F,quote = F)
 
 # scraps ----
 
