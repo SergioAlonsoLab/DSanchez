@@ -152,7 +152,7 @@ myBoxPlot <- function(gene) {
   text(1.5,yrange[1] + diff(yrange)*1.05,sprintf("P=%1.2g",pValues[gene,"P_sub"]))
   text(3.5,yrange[1] + diff(yrange)*1.05,sprintf("P=%1.2g",pValues[gene,"P_vis"]))
   text(2.5,yrange[1] + diff(yrange)*1.3,sprintf("Pglobal=%1.2g\nPstatus=%1.2g\nPlocation=%1.2g\nPinter=%1.2g",
-                                               pValues[gene,"P_all"],
+                                               pValues[gene,"P_global"],
                                                pValues[gene,"P_status"],
                                                pValues[gene,"P_location"],
                                                pValues[gene,"P_interaction"]))
@@ -183,6 +183,22 @@ pdf("output/interactions.pdf",8,12)
 par(mfrow=c(4,3),mar=c(4,4,2,1))
 for(i in order(pValues$P_interaction)[1:24]) myBoxPlot(i)
 dev.off()
+
+# Create ranked lists for GSEA ----
+
+x <- tValues[,c(1,3)][order(pValues$P_sub),]
+write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+
+x <- tValues[,c(1,4)][order(pValues$P_vis),]
+write.table(x,file = "output/visceral.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+
+x <- tValues[,c(1,3)][order(pValues$P_sub),]
+write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+
+x <- tValues[,c(1,3)][order(pValues$P_sub),]
+write.table(x,file = "output/subcutaneous.rnk",sep="\t",row.names = F,col.names = F,quote = F)
+
+
 
 # scraps ----
 
